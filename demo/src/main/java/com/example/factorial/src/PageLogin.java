@@ -34,7 +34,7 @@ public class PageLogin extends Facade {
         /*检验是否是患者账号类型*/
         boolean ex = true;
         if(ex){
-            return ResponseEntity.ok("成功注册患者账号");
+            return ResponseEntity.status(200).body("成功注册患者账号");
         }
         else{
             return ResponseEntity.status(401).body("用户名格式不对");

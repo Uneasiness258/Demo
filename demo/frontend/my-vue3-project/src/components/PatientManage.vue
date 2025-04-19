@@ -24,6 +24,13 @@
         <h3>患者: {{ getPatientName(selectedPatient) }}</h3>
         <button @click="showMeasurementData">查看测量数据</button>
         <button @click="showHistoryData">查看历史数据</button>
+        <button @click="measureDataAction">测量数据</button>
+      </div>
+
+      <!-- 测量时显示进度条 -->
+      <div v-if="progress > 0 && progress < 100" class="progress-container">
+        <progress :value="progress" max="100"></progress>
+        <div>{{ progress }}%</div>
       </div>
 
       <div v-if="show3DData">
@@ -44,6 +51,9 @@
 </template>
 
 <script>
+// 🔵 引入你的测量脚本
+import { measureData } from '@/assets/measure.js'
+
 export default {
   data() {
     return {
@@ -55,7 +65,8 @@ export default {
       ],
       selectedPatient: null,
       show3DData: false,
-      historyData: []
+      historyData: [],
+      progress: 0 // 🔵 新增：测量进度
     };
   },
   computed: {
@@ -69,7 +80,6 @@ export default {
     }
   },
   created() {
-    // 初始化每个患者生成随机历史数据
     this.patients.forEach(patient => {
       patient.history = this.generateRandomHistory();
     });
@@ -84,18 +94,18 @@ export default {
     },
     showMeasurementData() {
       this.show3DData = true;
-      this.historyData = []; // 清空历史数据展示
+      this.historyData = [];
     },
     showHistoryData() {
       const patient = this.patients.find(p => p.id === this.selectedPatient);
       if (patient) {
         this.historyData = patient.history;
-        this.show3DData = false; // 隐藏3D图
+        this.show3DData = false;
       }
     },
     generateRandomHistory() {
       const records = [];
-      const recordCount = Math.floor(Math.random() * 5) + 3; // 随机生成3~7条记录
+      const recordCount = Math.floor(Math.random() * 5) + 3;
       for (let i = 0; i < recordCount; i++) {
         const date = new Date(
           Date.now() - Math.random() * 10000000000
@@ -104,6 +114,30 @@ export default {
         records.push(`日期: ${date} | 测量值: ${value}`);
       }
       return records;
+    },
+    // 🔵 修改后的测量方法
+    measureDataAction() {
+      this.progress = 0; // 开始测量时清空进度
+      measureData({
+        onProgress: (progress) => {
+          this.progress = progress;
+        },
+        onComplete: (result) => {
+          console.log('测量完成！结果：', result);
+
+          // 找到当前选中的患者，添加测量结果
+          const patient = this.patients.find(p => p.id === this.selectedPatient);
+          if (patient) {
+            const date = new Date().toLocaleDateString();
+            const record = `日期: ${date} | 心率: ${result.heartRate} bpm | 血压: ${result.bloodPressure} | 体温: ${result.temperature} ℃`;
+            patient.history.unshift(record); // 新数据加到最前面
+          }
+
+          // 测量完成后刷新历史记录展示
+          this.showHistoryData();
+          this.progress = 0; // 测量结束，清除进度显示
+        }
+      });
     }
   }
 };
@@ -161,5 +195,13 @@ ul {
 }
 li {
   margin: 5px 0;
+}
+.progress-container {
+  margin-top: 20px;
+  text-align: center;
+}
+progress {
+  width: 200px;
+  height: 20px;
 }
 </style>

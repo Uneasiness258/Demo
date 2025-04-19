@@ -25,7 +25,6 @@ public class Main {
 
         SpringApplication.run(Main.class, args);
         System.out.println("后端已启动，访问 http://localhost:12345");
-
         //权限树初始化
         PermissionEntityManagement.GetSingleton().INTI();
 
