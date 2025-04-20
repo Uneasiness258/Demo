@@ -10,7 +10,6 @@ public class Main {
         // 先启动Spring应用
         SpringApplication.run(Main.class, args);
         System.out.println("后端已启动，访问 http://localhost:12345");
-        
         // 然后初始化应用业务逻辑
         try {
             //权限树初始化

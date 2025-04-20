@@ -1,6 +1,6 @@
 <script setup>
+import { ElLoading, ElMessage } from 'element-plus';
 import { ref, onBeforeUnmount } from "vue";
-import { ElMessage } from "element-plus";
 
 const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
 const READ_CHAR_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
@@ -266,12 +266,17 @@ async function stopAllDevices() {
 }
 
 // 导出CSV文件
-function exportToCSV() {
+async function exportToCSV() {
   if (imuDataArray.value.length === 0) {
     ElMessage.warning("没有数据可以导出");
     return;
   }
-
+  const loading = ElLoading.service({
+      lock: true,
+      text: '正在上传数据...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    });
+  try{
   const headers = [
     '时间戳', '设备ID', '设备名称',
     'AccX(g)', 'AccY(g)', 'AccZ(g)',
@@ -292,13 +297,43 @@ function exportToCSV() {
 
   const csvContent = "\uFEFF" + headers + rows;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `imu_data_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const formData = new FormData();
+      formData.append('file', blob, `imu_data_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`);
+      formData.append('deviceCount', devices.value.length);
+      formData.append('startTime', imuDataArray.value[0].timestamp);
+      formData.append('endTime', imuDataArray.value[imuDataArray.value.length - 1].timestamp);
+
+      // 3. 发送到后端
+      const response = await fetch('/api/data/upload-csv', {
+        method: 'POST',
+        body: formData
+        // 注意: 不要设置Content-Type头部，浏览器会自动设置multipart/form-data
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '上传失败');
+      }
+
+      const result = await response.json();
+      ElMessage.success(`数据上传成功: ${result.filename}`);
+
+    } catch (error) {
+      console.error('上传失败:', error);
+      ElMessage.error(`上传失败: ${error.message}`);
+    } finally {
+      loading.close();
+    }
+
+
+
+  //const url = URL.createObjectURL(blob);
+  //const link = document.createElement('a');
+  //link.href = url;
+  //link.download = `imu_data_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+  //document.body.appendChild(link);
+  //link.click();
+  //document.body.removeChild(link);
 }
 
 // 清空数据

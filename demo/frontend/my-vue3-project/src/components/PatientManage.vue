@@ -27,7 +27,6 @@
         <button @click="measureDataAction">测量数据</button>
       </div>
 
-      <!-- 测量时显示进度条 -->
       <div v-if="progress > 0 && progress < 100" class="progress-container">
         <progress :value="progress" max="100"></progress>
         <div>{{ progress }}%</div>
@@ -51,9 +50,6 @@
 </template>
 
 <script>
-// 🔵 引入你的测量脚本
-import { measureData } from '@/assets/measure.js'
-
 export default {
   data() {
     return {
@@ -66,7 +62,7 @@ export default {
       selectedPatient: null,
       show3DData: false,
       historyData: [],
-      progress: 0 // 🔵 新增：测量进度
+      progress: 0
     };
   },
   computed: {
@@ -83,6 +79,19 @@ export default {
     this.patients.forEach(patient => {
       patient.history = this.generateRandomHistory();
     });
+
+    // 🔥 页面返回时，检查是否有采集回来的测量数据
+    if (this.$route.query.measureResult && this.$route.query.patientId) {
+      const result = JSON.parse(this.$route.query.measureResult);
+      const patientId = parseInt(this.$route.query.patientId);
+
+      const patient = this.patients.find(p => p.id === patientId);
+      if (patient) {
+        const date = new Date().toLocaleDateString();
+        const record = `日期: ${date} | 心率: ${result.heartRate} bpm | 血压: ${result.bloodPressure} | 体温: ${result.temperature} ℃`;
+        patient.history.unshift(record);
+      }
+    }
   },
   methods: {
     goBack() {
@@ -115,28 +124,11 @@ export default {
       }
       return records;
     },
-    // 🔵 修改后的测量方法
     measureDataAction() {
-      this.progress = 0; // 开始测量时清空进度
-      measureData({
-        onProgress: (progress) => {
-          this.progress = progress;
-        },
-        onComplete: (result) => {
-          console.log('测量完成！结果：', result);
-
-          // 找到当前选中的患者，添加测量结果
-          const patient = this.patients.find(p => p.id === this.selectedPatient);
-          if (patient) {
-            const date = new Date().toLocaleDateString();
-            const record = `日期: ${date} | 心率: ${result.heartRate} bpm | 血压: ${result.bloodPressure} | 体温: ${result.temperature} ℃`;
-            patient.history.unshift(record); // 新数据加到最前面
-          }
-
-          // 测量完成后刷新历史记录展示
-          this.showHistoryData();
-          this.progress = 0; // 测量结束，清除进度显示
-        }
+      // 🔥 跳转到蓝牙页面，同时带上患者ID
+      this.$router.push({
+        name: "BlueTooth",
+        query: { patientId: this.selectedPatient }
       });
     }
   }
@@ -144,6 +136,7 @@ export default {
 </script>
 
 <style scoped>
+/* 你的原样式保持不变，这里省略 */
 .patient-manage {
   position: relative;
   width: 100%;
