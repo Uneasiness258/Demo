@@ -11,58 +11,92 @@
         <input v-model="searchQuery" type="text" placeholder="搜索患者姓名..." />
       </div>
 
-      <div>
-        <label for="patient">选择患者: </label>
-        <select v-model="selectedPatient" id="patient">
-          <option v-for="patient in filteredPatients" :key="patient.id" :value="patient.id">
-            {{ patient.name }}
-          </option>
-        </select>
-      </div>
+      <div v-for="patient in filteredPatients" :key="patient.id" class="patient-card">
+        <div class="patient-header">
+          <h3>{{ patient.name }}</h3>
+          <button @click="toggleDetails(patient.id)">
+            {{ expandedPatients.includes(patient.id) ? '收起详情' : '查看详情' }}
+          </button>
+          <button @click="measureDataAction(patient.id)">测量数据</button>
+        </div>
 
-      <div v-if="selectedPatient">
-        <h3>患者: {{ getPatientName(selectedPatient) }}</h3>
-        <button @click="showMeasurementData">查看测量数据</button>
-        <button @click="showHistoryData">查看历史数据</button>
-        <button @click="measureDataAction">测量数据</button>
-      </div>
+        <div v-if="expandedPatients.includes(patient.id)" class="patient-details">
+          <button @click="showMeasurementData(patient.id)">查看测量数据</button>
+          <button @click="showHistoryData(patient.id)">查看历史数据</button>
 
-      <div v-if="progress > 0 && progress < 100" class="progress-container">
-        <progress :value="progress" max="100"></progress>
-        <div>{{ progress }}%</div>
-      </div>
+          <div v-if="currentPatientId === patient.id">
+            <div v-if="progress > 0 && progress < 100" class="progress-container">
+              <progress :value="progress" max="100"></progress>
+              <div>{{ progress }}%</div>
+            </div>
 
-      <div v-if="show3DData">
-        <h3>3D测量数据展示</h3>
-        <img src="@/assets/3d-measurement.gif" alt="3D Measurement Data" />
-      </div>
+            <div v-if="show3DData">
+              <h4>3D测量数据展示</h4>
+              <img src="@/assets/3d-measurement.gif" alt="3D Measurement Data" />
+            </div>
 
-      <div v-if="historyData.length">
-        <h3>历史数据</h3>
-        <ul>
-          <li v-for="(record, index) in historyData" :key="index">
-            {{ record }}
-          </li>
-        </ul>
+            <div v-if="historyData.length">
+              <h4>历史数据</h4>
+              <ul>
+                <li v-for="(record, index) in historyData" :key="index" style="margin-bottom: 10px;">
+                  {{ record.date }} | 类型: {{ record.type }} | 摘要: {{ record.summary }}
+                  <button @click="toggleReport(index)">
+                    {{ expandedReports.includes(index) ? '收起' : '展开' }}
+                  </button>
+
+                  <div v-if="expandedReports.includes(index)" class="detail-section">
+                    <table class="gait-table">
+                      <thead>
+                        <tr>
+                          <th>指标</th>
+                          <th v-for="(col, idx) in gaitColumns" :key="'header-' + idx">{{ col }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>运动幅度</td>
+                          <td v-for="(value, idx) in record.data['运动幅度']" :key="'move-' + idx">{{ value }}</td>
+                        </tr>
+                        <tr>
+                          <td>得分</td>
+                          <td v-for="(value, idx) in record.data['得分']" :key="'score-' + idx">{{ value }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                  </div>
+
+                </li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import Papa from 'papaparse'; // 引入PapaParse解析CSV
+
 export default {
   data() {
     return {
       searchQuery: "",
       patients: [
-        { id: 1, name: "患者1", history: [] },
-        { id: 2, name: "患者2", history: [] },
-        { id: 3, name: "患者3", history: [] }
+        { id: 1, name: "患者1" },
+        { id: 2, name: "患者2" },
+        { id: 3, name: "患者3" }
       ],
-      selectedPatient: null,
+      expandedPatients: [],
       show3DData: false,
       historyData: [],
-      progress: 0
+      currentPatientId: null,
+      progress: 0,
+      allReports: [],        // 所有CSV数据
+      expandedReports: [],   // 当前展开的历史数据索引
+      gaitColumns: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6']
     };
   },
   computed: {
@@ -76,11 +110,8 @@ export default {
     }
   },
   created() {
-    this.patients.forEach(patient => {
-      patient.history = this.generateRandomHistory();
-    });
+    this.fetchCSVData();
 
-    // 🔥 页面返回时，检查是否有采集回来的测量数据
     if (this.$route.query.measureResult && this.$route.query.patientId) {
       const result = JSON.parse(this.$route.query.measureResult);
       const patientId = parseInt(this.$route.query.patientId);
@@ -89,6 +120,7 @@ export default {
       if (patient) {
         const date = new Date().toLocaleDateString();
         const record = `日期: ${date} | 心率: ${result.heartRate} bpm | 血压: ${result.bloodPressure} | 体温: ${result.temperature} ℃`;
+        if (!patient.history) patient.history = [];
         patient.history.unshift(record);
       }
     }
@@ -97,38 +129,68 @@ export default {
     goBack() {
       this.$router.push({ name: "user" });
     },
-    getPatientName(patientId) {
-      const patient = this.patients.find(p => p.id === patientId);
-      return patient ? patient.name : "";
+    toggleDetails(patientId) {
+      const index = this.expandedPatients.indexOf(patientId);
+      if (index > -1) {
+        this.expandedPatients.splice(index, 1);
+      } else {
+        this.expandedPatients.push(patientId);
+      }
+      this.show3DData = false;
+      this.historyData = [];
+      this.currentPatientId = null;
     },
-    showMeasurementData() {
+    showMeasurementData(patientId) {
+      this.currentPatientId = patientId;
       this.show3DData = true;
       this.historyData = [];
     },
-    showHistoryData() {
-      const patient = this.patients.find(p => p.id === this.selectedPatient);
-      if (patient) {
-        this.historyData = patient.history;
-        this.show3DData = false;
+    showHistoryData(patientId) {
+      this.currentPatientId = patientId;
+      this.show3DData = false;
+      this.historyData = this.allReports
+        .filter(report => report.date && report.type && report.summary)
+        .map(report => ({
+          date: report.date,
+          type: report.type,
+          summary: report.summary,
+          data: report.data
+        }));
+      this.expandedReports = [];
+    },
+    toggleReport(index) {
+      const pos = this.expandedReports.indexOf(index);
+      if (pos > -1) {
+        this.expandedReports.splice(pos, 1);
+      } else {
+        this.expandedReports.push(index);
       }
     },
-    generateRandomHistory() {
-      const records = [];
-      const recordCount = Math.floor(Math.random() * 5) + 3;
-      for (let i = 0; i < recordCount; i++) {
-        const date = new Date(
-          Date.now() - Math.random() * 10000000000
-        ).toLocaleDateString();
-        const value = (Math.random() * 100).toFixed(2);
-        records.push(`日期: ${date} | 测量值: ${value}`);
-      }
-      return records;
-    },
-    measureDataAction() {
-      // 🔥 跳转到蓝牙页面，同时带上患者ID
+    measureDataAction(patientId) {
       this.$router.push({
         name: "BlueTooth",
-        query: { patientId: this.selectedPatient }
+        query: { patientId: patientId }
+      });
+    },
+    fetchCSVData() {
+      Papa.parse('/sentiment_data.csv', {
+        download: true,
+        header: true,
+        complete: (result) => {
+          const csvData = result.data;
+          this.allReports = csvData.map(item => ({
+            date: item.date,
+            type: item.type,
+            summary: item.summary,
+            data: {
+              '运动幅度': JSON.parse(item.运动幅度 || '[]'),
+              '得分': JSON.parse(item.得分 || '[]')
+            }
+          }));
+        },
+        error: (error) => {
+          console.error('读取CSV出错:', error);
+        }
       });
     }
   }
@@ -136,7 +198,6 @@ export default {
 </script>
 
 <style scoped>
-/* 你的原样式保持不变，这里省略 */
 .patient-manage {
   position: relative;
   width: 100%;
@@ -197,4 +258,25 @@ progress {
   width: 200px;
   height: 20px;
 }
+.detail-section {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f0f9ff;
+  border-radius: 6px;
+}
+.gait-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+}
+.gait-table th,
+.gait-table td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
+}
+.gait-table th {
+  background-color: #f7f7f7;
+}
+
 </style>

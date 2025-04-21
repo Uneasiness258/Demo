@@ -1,16 +1,45 @@
-<template>
+<template> 
   <div class="patient">
     <div class="background"></div> <!-- 背景层 -->
 
     <div class="patient-content">
-      <h2>患者界面 - 历史健康数据</h2>
+      <h2>患者界面 - 步态分析报告</h2>
+
+      <!-- 报告选择 -->
+      <div class="report-selection">
+        <label for="report-select">选择报告：</label>
+        <select id="report-select" v-model="selectedReport" @change="loadReportData">
+          <option v-for="(report, index) in reports" :key="index" :value="index">
+            {{ report.date }} - {{ report.type }}
+          </option>
+        </select>
+      </div>
+
+      <!-- 步态分析数据展示 -->
+      <div class="gait-analysis">
+        <h3>步态分析数据</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>指标</th>
+              <th v-for="(col, index) in gaitData.columns" :key="index">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, rowIndex) in gaitData.rows" :key="rowIndex">
+              <td>{{ row.name }}</td>
+              <td v-for="(value, colIndex) in row.values" :key="colIndex">{{ value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- 搜索功能 -->
       <div class="search">
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="搜索记录 (日期/体温/血压)"
+          placeholder="搜索历史记录 (日期/类型)"
         />
       </div>
 
@@ -18,18 +47,16 @@
         <table>
           <thead>
             <tr>
-              <th @mouseover="sortTable('date')">日期</th>
-              <th @mouseover="sortTable('temperature')">体温 (℃)</th>
-              <th @mouseover="sortTable('bloodPressure')">血压 (mmHg)</th>
-              <th>就诊记录</th>
+              <th @click="sortTable('date')">日期</th>
+              <th @click="sortTable('type')">报告类型</th>
+              <th @click="sortTable('summary')">摘要</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(record, index) in filteredRecords" :key="index">
+            <tr v-for="(record, index) in filteredRecords" :key="index" @click="selectReport(index)">
               <td>{{ record.date }}</td>
-              <td>{{ record.temperature }}</td>
-              <td>{{ record.bloodPressure }}</td>
-              <td>{{ record.visit }}</td>
+              <td>{{ record.type }}</td>
+              <td>{{ record.summary }}</td>
             </tr>
           </tbody>
         </table>
@@ -37,60 +64,96 @@
     </div>
   </div>
 </template>
-
 <script>
+import Papa from 'papaparse'; // 用PapaParse解析CSV
+
 export default {
   name: "PatientHistoryPage",
   data() {
     return {
       searchQuery: "",
-      records: [
-        {
-          date: "2025-04-10",
-          temperature: "36.5",
-          bloodPressure: "120/80",
-          visit: "常规体检",
-        },
-        {
-          date: "2025-03-15",
-          temperature: "37.2",
-          bloodPressure: "130/85",
-          visit: "感冒复诊",
-        },
-        {
-          date: "2025-02-05",
-          temperature: "36.8",
-          bloodPressure: "118/78",
-          visit: "年度体检",
-        },
-      ],
+      selectedReport: 0,
+      gaitData: {
+        columns: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6'],
+        rows: [
+          { name: '运动幅度', values: [] },
+          { name: '得分', values: [] }
+        ]
+      },
+      reports: [],
+      sortField: '',
+      sortDirection: 1
     };
   },
   computed: {
-    // 筛选记录
     filteredRecords() {
-      return this.records.filter((record) => {
+      return this.reports.filter((record) => {
         return (
           record.date.includes(this.searchQuery) ||
-          record.temperature.includes(this.searchQuery) ||
-          record.bloodPressure.includes(this.searchQuery) ||
-          record.visit.includes(this.searchQuery)
+          record.type.includes(this.searchQuery) ||
+          record.summary.includes(this.searchQuery)
         );
       });
     },
   },
   methods: {
-    // 排序功能（按日期、体温或血压排序）
+    loadReportData() {
+      const report = this.reports[this.selectedReport];
+      this.gaitData.rows[0].values = report.data['运动幅度'];
+      this.gaitData.rows[1].values = report.data['得分'];
+    },
+    selectReport(index) {
+      this.selectedReport = index;
+      this.loadReportData();
+    },
     sortTable(property) {
-      this.records.sort((a, b) => {
-        if (a[property] > b[property]) return 1;
-        if (a[property] < b[property]) return -1;
+      if (this.sortField === property) {
+        this.sortDirection *= -1;
+      } else {
+        this.sortField = property;
+        this.sortDirection = 1;
+      }
+
+      this.reports.sort((a, b) => {
+        if (a[property] > b[property]) return 1 * this.sortDirection;
+        if (a[property] < b[property]) return -1 * this.sortDirection;
         return 0;
       });
     },
+    fetchCSVData() {
+      Papa.parse('/sentiment_data.csv', {
+        download: true,
+        header: true,
+        complete: (result) => {
+          const csvData = result.data;
+
+          this.reports = csvData.map(item => ({
+            date: item.date,
+            type: item.type,
+            summary: item.summary,
+            data: {
+              '运动幅度': JSON.parse(item.运动幅度 || '[]'),
+              '得分': JSON.parse(item.得分 || '[]')
+            }
+          }));
+
+          if (this.reports.length > 0) {
+            this.selectedReport = 0;
+            this.loadReportData();
+          }
+        },
+        error: (error) => {
+          console.error('读取CSV文件出错:', error);
+        }
+      });
+    }
   },
+  mounted() {
+    this.fetchCSVData();
+  }
 };
 </script>
+
 
 <style scoped>
 .patient {
@@ -116,17 +179,41 @@ export default {
 .patient-content {
   position: relative;
   z-index: 2;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.9);
   padding: 40px;
   border-radius: 10px;
-  width: 800px;
+  width: 900px;
   max-height: 90vh;
   overflow-y: auto;
 }
 
-h2 {
+h2, h3 {
   text-align: center;
   margin-bottom: 20px;
+}
+
+.report-selection {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.report-selection select {
+  padding: 8px;
+  width: 300px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.gait-analysis {
+  margin-bottom: 30px;
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 5px;
+}
+
+.gait-analysis table {
+  width: 100%;
+  margin-top: 10px;
 }
 
 .search {
@@ -137,7 +224,7 @@ h2 {
 
 input {
   padding: 8px;
-  width: 200px;
+  width: 250px;
   border-radius: 5px;
   border: 1px solid #ccc;
 }
@@ -166,5 +253,10 @@ th {
 
 th:hover {
   background-color: #ddd;
+}
+
+.record-list tbody tr:hover {
+  background-color: #f5f5f5;
+  cursor: pointer;
 }
 </style>

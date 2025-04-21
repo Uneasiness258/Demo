@@ -5,6 +5,13 @@
     <div class="admin-content">
       <h2>管理员界面 - 医生与患者关系管理</h2>
 
+      <!-- 注册医生表单 --> <!-- 新增 -->
+      <div class="form">
+        <input v-model="newDoctorUsername" type="text" placeholder="医生用户名" />
+        <input v-model="newDoctorPassword" type="password" placeholder="医生密码" />
+        <button @click="registerDoctor">注册医生</button>
+      </div>
+
       <!-- 新增关系表单 -->
       <div class="form">
         <input v-model="newDoctor" type="text" placeholder="医生姓名" />
@@ -36,21 +43,39 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- 医生账户列表展示 --> <!-- 新增 -->
+      <h3 style="margin-top: 30px;">已注册医生账户</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>密码</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(doctor, index) in doctors" :key="index">
+            <td>{{ doctor.username }}</td>
+            <td>{{ doctor.password }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>
+
 
 <script>
 export default {
   name: "AdminPage",
   data() {
     return {
-      relations: [
-        { doctor: "张医生", patient: "李患者" },
-        { doctor: "王医生", patient: "赵患者" },
-      ],
+      relations: [],
+      doctors: [],
       newDoctor: "",
       newPatient: "",
+      newDoctorUsername: "",
+      newDoctorPassword: "",
     };
   },
   methods: {
@@ -68,6 +93,25 @@ export default {
       this.newPatient = "";
       alert("关系添加成功！");
     },
+    // 注册医生账户（用户名+密码）
+    registerDoctor() {
+      if (!this.newDoctorUsername || !this.newDoctorPassword) {
+        alert("用户名和密码都不能为空！");
+        return;
+      }
+      const exists = this.doctors.some(doc => doc.username === this.newDoctorUsername);
+      if (exists) {
+        alert("用户名已存在！");
+        return;
+      }
+      this.doctors.push({
+        username: this.newDoctorUsername,
+        password: this.newDoctorPassword,
+      });
+      this.newDoctorUsername = "";
+      this.newDoctorPassword = "";
+      alert("医生注册成功！");
+    },
     // 删除医生与患者关系
     deleteRelation(index) {
       if (confirm("确定要删除这条关系吗？")) {
@@ -82,12 +126,48 @@ export default {
         alert("医生和患者姓名都不能为空！");
         return;
       }
-      // 模拟保存数据操作
       alert("修改成功！");
     },
+    // 解析 医生-患者关系 CSV
+    parseDoctorPatientCSV(csv) {
+      const lines = csv.trim().split('\n');
+      return lines.map(line => {
+        const [doctor, patient] = line.split(',');
+        return { doctor: doctor.trim(), patient: patient.trim() };
+      });
+    },
+    // 解析 医生账户 CSV
+    parseDoctorAccountCSV(csv) {
+      const lines = csv.trim().split('\n');
+      return lines.map(line => {
+        const [username, password] = line.split(',');
+        return { username: username.trim(), password: password.trim() };
+      });
+    },
+    // 加载 CSV 文件
+    async loadCSVData() {
+      try {
+        // 加载 医生与患者关系
+        const relationResponse = await fetch('/DoctorPatientRelationship.csv');
+        const relationText = await relationResponse.text();
+        this.relations = this.parseDoctorPatientCSV(relationText);
+
+        // 加载 医生账户
+        const doctorResponse = await fetch('/DoctorAccount.csv');
+        const doctorText = await doctorResponse.text();
+        this.doctors = this.parseDoctorAccountCSV(doctorText);
+      } catch (error) {
+        console.error("加载CSV文件失败：", error);
+        alert("加载初始数据失败，请检查文件路径或服务器设置！");
+      }
+    },
   },
+  mounted() {
+    this.loadCSVData();
+  }
 };
 </script>
+
 
 <style scoped>
 .admin {
