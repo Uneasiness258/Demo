@@ -8,13 +8,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api")
-public class PageLogin extends Facade {
+public class PageLogin {
     //初始化，为每一个页面实例添加权限用户
     //此页面作为初始界面，不需要赋予权限
-    @Override
-    public void INTI(User user){
-        this.user = user;
-    }
     //登录方法
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest request) {

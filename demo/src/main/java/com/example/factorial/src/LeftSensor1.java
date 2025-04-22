@@ -6,18 +6,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
-public class LeftSensor1 extends Observer{
+public class LeftSensor1 {
     
     private ArrayList<Double> a;
     private HashMap<String, Double> map;
-    
-    @Autowired
-    public LeftSensor1(SwitchState s){
-        super(s);
-        this.a = new ArrayList<>();
-        this.map = new HashMap<>();
-    }
-
     // 初始化方法
     public void init() {
         a.add(0.0);

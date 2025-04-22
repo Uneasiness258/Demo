@@ -13,11 +13,9 @@ public class Main {
         // 然后初始化应用业务逻辑
         try {
             //权限树初始化
-            PermissionEntityManagement.GetSingleton().INTI();
+            //PermissionEntityManagement.GetSingleton().INTI();
             //登录验证后返回用户类型，以创建该用户的权限类型
-            User user = new User("张三",PermissionEntityManagement.GetSingleton().GetPat());
-            //页面初始化,获得了属于该用户权限类型的Pages
-            PageManagement.GetSingleton().INTI(user);
+            //User user = new User("张三",PermissionEntityManagement.GetSingleton().GetPat());
         } catch (Exception e) {
             System.out.println("初始化过程中发生错误: " + e.getMessage());
             e.printStackTrace();

@@ -24,14 +24,14 @@
             <artifactId>spring-boot-starter-web</artifactId>
             <version>2.7.0</version> <!-- 保持与你日志中的版本一致 -->
         </dependency>
-        
+
         <!-- 添加MySQL依赖 -->
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <scope>runtime</scope>
         </dependency>
-        
+
         <!-- 添加Spring Data JPA依赖 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
